@@ -22,6 +22,13 @@ variable "grants" {
     EOT
 }
 
+variable "ignore_policy_change" {
+  type        = bool
+  default     = false
+  description = <<-EOT
+    Turns on the lifecycle meta arguement to ignore policy changes, handy if you have other 'things' change it after apply
+    EOT
+}
 variable "source_policy_documents" {
   type        = list(string)
   default     = []

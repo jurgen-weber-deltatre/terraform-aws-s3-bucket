@@ -456,19 +456,22 @@ data "aws_iam_policy_document" "aggregated_policy" {
 }
 
 resource "aws_s3_bucket_policy" "default" {
-  count      = local.enabled && (var.allow_ssl_requests_only || var.allow_encrypted_uploads_only || length(var.s3_replication_source_roles) > 0 || length(var.privileged_principal_arns) > 0 || var.policy != "") ? 1 : 0
+  count      = local.enabled && (var.allow_ssl_requests_only || var.allow_encrypted_uploads_only || length(var.s3_replication_source_roles) > 0 || length(var.privileged_principal_arns) > 0 || var.policy != "") && var.ignore_policy_change == false ? 1 : 0
+  bucket     = join("", aws_s3_bucket.default.*.id)
+  policy     = join("", data.aws_iam_policy_document.aggregated_policy.*.json)
+  depends_on = [aws_s3_bucket_public_access_block.default]
+}
+
+resource "aws_s3_bucket_policy" "default_ignore" {
+  count      = local.enabled && (var.allow_ssl_requests_only || var.allow_encrypted_uploads_only || length(var.s3_replication_source_roles) > 0 || length(var.privileged_principal_arns) > 0 || var.policy != "") && var.ignore_policy_change ? 1 : 0
   bucket     = join("", aws_s3_bucket.default.*.id)
   policy     = join("", data.aws_iam_policy_document.aggregated_policy.*.json)
   depends_on = [aws_s3_bucket_public_access_block.default]
 
-  dynamic lifecycle {
-    for_each = var.ignore_policy_change ? [1] : []
-
-    content {
-      ignore_changes = [
-        policy
-      ]
-    }
+  lifecycle {
+    ignore_changes = [
+      policy
+    ]
   }
 }
 
@@ -499,7 +502,7 @@ resource "aws_s3_bucket_ownership_controls" "default" {
 # Workaround S3 eventual consistency for settings objects
 resource "time_sleep" "wait_for_aws_s3_bucket_settings" {
   count            = local.enabled ? 1 : 0
-  depends_on       = [aws_s3_bucket_public_access_block.default, aws_s3_bucket_policy.default]
+  depends_on       = [aws_s3_bucket_public_access_block.default, aws_s3_bucket_policy.default, aws_s3_bucket_policy.default_ignore]
   create_duration  = "30s"
   destroy_duration = "30s"
 }

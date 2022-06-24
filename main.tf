@@ -2,6 +2,7 @@ locals {
   enabled   = module.this.enabled
   partition = join("", data.aws_partition.current.*.partition)
 
+  object_lock_enabled           = local.enabled && var.object_lock_configuration != null
   replication_enabled           = local.enabled && var.s3_replication_enabled
   versioning_enabled            = local.enabled && var.versioning_enabled
   transfer_acceleration_enabled = local.enabled && var.transfer_acceleration_enabled
@@ -38,13 +39,7 @@ resource "aws_s3_bucket" "default" {
   bucket        = local.bucket_name
   force_destroy = var.force_destroy
 
-  dynamic "object_lock_configuration" {
-    for_each = var.object_lock_configuration != null ? [1] : []
-
-    content {
-      object_lock_enabled = "Enabled"
-    }
-  }
+  object_lock_enabled = local.object_lock_enabled
 
   tags = module.this.tags
 }
@@ -301,7 +296,7 @@ resource "aws_s3_bucket_replication_configuration" "default" {
 }
 
 resource "aws_s3_bucket_object_lock_configuration" "default" {
-  count = local.enabled && var.object_lock_configuration != null ? 1 : 0
+  count = local.object_lock_enabled ? 1 : 0
 
   bucket = join("", aws_s3_bucket.default.*.id)
 
@@ -318,7 +313,7 @@ resource "aws_s3_bucket_object_lock_configuration" "default" {
 
 module "s3_user" {
   source  = "cloudposse/iam-s3-user/aws"
-  version = "0.15.7"
+  version = "0.15.9"
 
   enabled      = local.enabled && var.user_enabled
   s3_actions   = var.allowed_bucket_actions
@@ -456,7 +451,7 @@ data "aws_iam_policy_document" "aggregated_policy" {
 }
 
 resource "aws_s3_bucket_policy" "default" {
-  count      = local.enabled && (var.allow_ssl_requests_only || var.allow_encrypted_uploads_only || length(var.s3_replication_source_roles) > 0 || length(var.privileged_principal_arns) > 0 || var.policy != "") ? 1 : 0
+  count      = local.enabled && (var.allow_ssl_requests_only || var.allow_encrypted_uploads_only || length(var.s3_replication_source_roles) > 0 || length(var.privileged_principal_arns) > 0 || length(var.source_policy_documents) > 0) ? 1 : 0
   bucket     = join("", aws_s3_bucket.default.*.id)
   policy     = join("", data.aws_iam_policy_document.aggregated_policy.*.json)
   depends_on = [aws_s3_bucket_public_access_block.default]
